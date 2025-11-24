@@ -4,6 +4,7 @@ from fastapi import FastAPI, Body, status, HTTPException
 from fastapi.responses import RedirectResponse
 from database.db import engine
 from database.models import Base
+from exceptions import NoLongUrlFoundError, SlugAlreadyExistsError
 from service import create_short_url, get_url_by_slug
 
 @asynccontextmanager
@@ -18,14 +19,17 @@ app = FastAPI(lifespan=lifespan)
 
 @app.post('/short_url')
 async def generate_short_url(long_url: str = Body(embed=True)): 
-    new_slug = await create_short_url(long_url)
+    try:
+        new_slug = await create_short_url(long_url)
+    except SlugAlreadyExistsError:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='что то пошло не так')
     return {'data': new_slug}       
 
 @app.get('/{slug}')
 async def redirect_to_url(slug: str):
     try:
         long_url = await get_url_by_slug(slug)
-    except status.HTTP_404_NOT_FOUND:
+    except NoLongUrlFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='ссылка не существует')
     return RedirectResponse(url=long_url, status_code=status.HTTP_302_FOUND)
 
